@@ -70,7 +70,7 @@ Całość projektu hostowana jest zdalnie na serwerze w chmurze, dlatego niezbę
 
 ### Generator ruchu
 
-Generator ruchu, podobnie jak, topologia, napisany został w Pythonie. Skrypt ten działa w nieskończonej pętli, podczas której losowane są dwa rodzaje ruchu - *mouse flow* oraz *elephant flow*. Każdy z nim posiada konfigurowalne parametry z poziomu skryptu. *Mouse flow* charakteryzuje się krótkim czasem trwania, oraz małym payloadem, natomiast *elephant flow* jest odwrotnością - trwa długo oraz generuje duży ruch. Wartości przepływów są ustalane względem określonego przez nas baseline, stąd określenia "duży" czy "mały" wymagają definicji
+Generator ruchu, podobnie jak topologia, napisany został w Pythonie. Skrypt ten działa w nieskończonej pętli, podczas której losowane są dwa rodzaje ruchu - *mouse flow* oraz *elephant flow*. Każdy z nim posiada konfigurowalne parametry z poziomu skryptu. *Mouse flow* charakteryzuje się krótkim czasem trwania, oraz małym payloadem, natomiast *elephant flow* jest odwrotnością - trwa długo oraz generuje duży ruch. Wartości przepływów są ustalane względem określonego przez nas baseline, stąd określenia "duży" czy "mały" wymagają definicji
 
 ```python
 # Szansa wylosowania słonia
