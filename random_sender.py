@@ -20,7 +20,7 @@ MOUSE_INTERVAL_SEC = 0.2  # Wysyłaj co 200ms
 
 # Słoń (Elephant Flow)
 ELEPHANT_PACKET_SIZE = 1400
-ELEPHANT_DURATION_SEC = 5 # Słoń trwa 5 sekund
+ELEPHANT_DURATION_SEC = 45 # Słoń trwa 45 sekund
 
 
 #my_ip = sys.argv[1] #skąd generujemy
