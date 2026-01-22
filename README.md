@@ -3,7 +3,7 @@ Niniejsze repozytorium zawiera projekt zaliczeniowy na zajęcia z Sieci Sterowan
 
 Elephant flows to charakterystyczny ruch w sieciach cechujący się dużym wolumenem danych przesyłanych w długim czasie. Zjawisko to skutecznie zapełnia dostępną przepustowość kanału, przepełnia bufory oraz negatywnie wpływa na zapewniania jakości obsługi (QoS) innych przepływów.
 
-W tradycyjnych sieciach elephant flows łagodzi się poprzez mechanizmy kolejkowania oraz kontroli ruchu. w architekturze SDN należy podejść w inny sposób - poprzez implementację jakiegoś algorytmu, który zniweluje działanie takiego ruchu poprzez wykrycie go, a następnie obsłużenie.  
+W tradycyjnych sieciach elephant flows łagodzi się poprzez mechanizmy kolejkowania oraz kontroli ruchu. W architekturze SDN problem ten może zostać rozwiązany w inny sposób - poprzez implementację jakiegoś algorytmu, który zniweluje działanie takiego ruchu poprzez wykrycie go, a następnie obsłużenie.  
 
 ## Część praktyczna
 
@@ -85,7 +85,7 @@ ELEPHANT_PACKET_SIZE = 1400
 ELEPHANT_DURATION_SEC = 45 # Słoń trwa 45 sekund
 ```
 
-Generator ten uruchamiany jest dzięki pomocniczemu skryptowi bashowemu, o nazwie run_generator.sh. Uruchamia on pętlę, w której losowany jest host, z którego odpalony zostanie skrypt random_sender.py, a ten z kolei generuje jeden z dwóch zdefiniowanych wcześniej charakterystycznych ruchów. Dzięki temu zapewniamy losowość przepływów na bazie adresu źródłowego oraz docelowego.
+Generator ten uruchamiany jest dzięki pomocniczemu skryptowi bashowemu, o nazwie *run_generator.sh*. Uruchamia on pętlę, w której losowany jest host, z którego odpalony zostanie skrypt *random_sender.py*, a ten z kolei generuje jeden z dwóch zdefiniowanych wcześniej charakterystycznych ruchów. Dzięki temu zapewniamy losowość przepływów na bazie adresu źródłowego oraz docelowego.
 
 ```bash
 while true; do sudo mnexec -a $(pgrep -f "mininet:h[1-6]" | shuf -n 1) python3 random_sender.py; done
@@ -93,5 +93,87 @@ while true; do sudo mnexec -a $(pgrep -f "mininet:h[1-6]" | shuf -n 1) python3 r
 
 W celu generacji ruchu zastosowaliśmy bibliotekę scapy.
 
+### Algorytm
+
+Sporządzony został prosty algorytm, który zapewnia wykrywanie *elephant* oraz *mouse flow*. Działa on w pętli, która nieustannie co 5 sekund sprawdza statystyki z komendy *FlowStatsRequest* wysyłanej do switchy. Następnie przez sterownik podejmowana jest decyzja, do której kategorii kwalifikuje się ruch. Jeżeli przekracza on 30 sekund oraz jego prędkość wynosiła więcej niż 5 Mbps -> kwalifikuje go jako słoń, następuje usunięcie aktualnego flow, wybór nowej trasy i dodanie jej do tablicy flow table. W przeciwnym razie, widzi ruch jako mouse. Poniżej znajduje się diagram, który opisuje flow działania pętli. 
+
 ![alt text](images/algo_diagram.png)
 
+## Sterownik
+
+Sterownikiem, który zastosowaliśmy w projekcie, jest [Ryu](https://ryu-sdn.org/_). Bazuje on na pliku *simple_switch_13.py* - jednym z domyślnie występujących plików w repozytorium projektu sterownika. Czyli aplikacja działa jak zwykły klasyczny uczący się switch L2, jednak została wzbogacona o przełączenia ścieżek (tylko dla *elephant flows*) oraz wykrywanie wcześniej wspomnianych przepływów.
+
+Algorytm działa w osobnym wątku - *hub.spawn*, który jest uruchamiany wraz ze sterownikiem. 
+
+```python
+# Wątek okresowego odpytywania statystyk
+self.monitor_thread = hub.spawn(self._monitor)
+
+...
+
+def _monitor(self):
+    while True:
+        for dp in list(self.datapaths.values()):
+            self._request_flow_stats(dp)
+        hub.sleep(self.STATS_INTERVAL_SEC)
+```
+
+Flow monitorowane jest co 5 sekund: STATS_INTERVAL_SEC = 5
+
+Poniżej znajduje się metoda *_request_flow_stats()*, która odpytuje switche w celu zebrania potrzebnych informacji. 
+
+Decyzja dotycząca, które flow jest tym prawidłowym dzieje się w metodzie _flow_stats_reply_handler(). Poniżej znajduje się głowna
+
+```python
+# Czas trwania flow (sekundy)
+duration = float(stat.duration_sec) + float(stat.duration_nsec) / 1e9
+
+# Obliczenie przyrostu bajtów od ostatniego pomiaru
+last = self._last_bytes.get((dpid, flow_key), None)
+if last is None:
+    self._last_bytes[(dpid, flow_key)] = byte_count
+    continue
+
+delta_bytes = max(0, byte_count - last)
+self._last_bytes[(dpid, flow_key)] = byte_count
+
+# Przepływność
+rate_bps = (delta_bytes * 8.0) / float(self.STATS_INTERVAL_SEC)
+
+# Decyzja
+is_elephant = (
+    duration > self.ELEPHANT_DURATION_THRESHOLD_SEC and
+    rate_bps > self.ELEPHANT_RATE_THRESHOLD_BPS
+)
+
+prev_class = self._flow_class.get((dpid, flow_key), None)
+new_class = 'elephant' if is_elephant else 'mouse'
+```
+```python
+def _request_flow_stats(self, datapath):
+    ofproto = datapath.ofproto
+    parser = datapath.ofproto_parser
+    req = parser.OFPFlowStatsRequest(datapath, 0, ofproto.OFPTT_ALL,
+                                    ofproto.OFPP_ANY, ofproto.OFPG_ANY,
+                                    0, 0, parser.OFPMatch())
+    datapath.send_msg(req)
+```
+## Komendy
+
+Aby przeprowadzić część praktyczną należy zalogować się poprzez ssh do maszyny wirtualnej na trzech niezależnych instancjach terminala. Na każdym z nich zostanie uruchomiona inna aplikacja:
+1. Mininet,
+2. Sterownik,
+3. Generator ruchu,
+
+Uruchamianie emulatora Mininet:
+- ```mininet@mininet:~$ sudo -E mn --custom ~/custom_topos/eleflow_simple.py --topo mytopo --controller=remote```
+
+Uruchamianie sterownika Ryu:
+- ```mininet@mininet:~$ ryu-manager elephant_switch.py```
+
+    Należy odczekać kilka sekund aby sterownik na pewno miał pełną wiedzę o topologii PRZED uruchomieniem skryptu. W tym celu można wykonać komendę pingall w mininet i czekać dopóki nie osiągniemy 100% pokrycia w komunikacji pomiędzy hostami.
+
+Uruchamianie generatora ruchu:
+- ```mininet@mininet:~$ ./run_generator.sh```
+
+Teraz należy zaobserwować na terminalu z uruchomionym sterownikiem wiadomości o nowo wykrytych przepływach. 
