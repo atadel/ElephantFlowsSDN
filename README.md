@@ -132,7 +132,7 @@ def _request_flow_stats(self, datapath):
     datapath.send_msg(req)
 ```
 
-Decyzja dotycząca, które flow jest tym prawidłowym dzieje się w metodzie _flow_stats_reply_handler(). Poniżej znajduje się głowna
+Decyzja dotycząca, które flow jest tym prawidłowym dzieje się w metodzie _flow_stats_reply_handler(). Poniżej znajduje się listing z najważniejszymi liniami kodu.
 
 ```python
 # Czas trwania flow (sekundy)
