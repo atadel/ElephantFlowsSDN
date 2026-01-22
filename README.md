@@ -122,6 +122,16 @@ Flow monitorowane jest co 5 sekund: STATS_INTERVAL_SEC = 5
 
 Poniżej znajduje się metoda *_request_flow_stats()*, która odpytuje switche w celu zebrania potrzebnych informacji. 
 
+```python
+def _request_flow_stats(self, datapath):
+    ofproto = datapath.ofproto
+    parser = datapath.ofproto_parser
+    req = parser.OFPFlowStatsRequest(datapath, 0, ofproto.OFPTT_ALL,
+                                    ofproto.OFPP_ANY, ofproto.OFPG_ANY,
+                                    0, 0, parser.OFPMatch())
+    datapath.send_msg(req)
+```
+
 Decyzja dotycząca, które flow jest tym prawidłowym dzieje się w metodzie _flow_stats_reply_handler(). Poniżej znajduje się głowna
 
 ```python
@@ -148,15 +158,6 @@ is_elephant = (
 
 prev_class = self._flow_class.get((dpid, flow_key), None)
 new_class = 'elephant' if is_elephant else 'mouse'
-```
-```python
-def _request_flow_stats(self, datapath):
-    ofproto = datapath.ofproto
-    parser = datapath.ofproto_parser
-    req = parser.OFPFlowStatsRequest(datapath, 0, ofproto.OFPTT_ALL,
-                                    ofproto.OFPP_ANY, ofproto.OFPG_ANY,
-                                    0, 0, parser.OFPMatch())
-    datapath.send_msg(req)
 ```
 ## Komendy
 
